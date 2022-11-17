@@ -1,53 +1,10 @@
-import time
-from multiprocessing import cpu_count
-from typing import Union, NamedTuple
-
-import torch
-import torch.backends.cudnn
-import numpy as np
-from torch import nn, optim
-from torch.nn import functional as F
-from torch.nn import Flatten as Flatten
-from torch.optim.optimizer import Optimizer
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
-
-import argparse
-from pathlib import Path
-
-torch.backends.cudnn.benchmark = True
-
-if torch.cuda.is_available():
-    DEVICE = torch.device("cuda")
-else:
-    DEVICE = torch.device("cpu")
-
 
 def main():
-    train_dataset = GTZAN('/content/drive/MyDrive/Github/train.pkl')
-    test_dataset = GTZAN('/content/drive/MyDrive/Github/val.pkl')
-
-    train_loader = torch.utils.data.DataLoader(
-      train_dataset,
-      shuffle=True,
-      batch_size=128,
-      pin_memory=True,
-      num_workers=cpu_count(),
-    )
-
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        shuffle=False,
-        batch_size=128,
-        num_workers=cpu_count(),
-        pin_memory=True,
-    )
     model = CNN(height=80, width=80, channels=1, class_count=10)
 
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = optim.Adam(lr=0.00005,betas=(0.9,0.999),eps=1e-08)
+    optimizer = optim.Adam(model.parameters(),lr=0.00005,betas=(0.9,0.999),eps=1e-08)
 
     log_dir = get_summary_writer_log_dir()
     print(f"Writing logs to {log_dir}")
@@ -56,11 +13,10 @@ def main():
             flush_secs=5
     )
     trainer = Trainer(
-        model, train_loader, test_loader, criterion, optimizer, summary_writer, DEVICE, scheduler
+        model, train_loader, test_loader, criterion, optimizer, summary_writer, DEVICE
     )
-
     trainer.train(
-        40,
+        200,
         2,
         print_frequency=10,
         log_frequency=10,
@@ -72,44 +28,53 @@ def main():
 class CNN(nn.Module):
     def __init__(self, height: int, width: int, channels: int, class_count: int):
         super().__init__()
-        self.input_shape = ImageShape(height=height, width=width, channels=channels)
+        self.softmax = nn.Softmax(dim=1)
+        self.dropout = nn.Dropout(0.1)
         self.class_count = class_count
 
-        self.conv1 = nn.Conv2d(
-            in_channels=self.input_shape.channels,
-            out_channels=32,
-            kernel_size=(5, 5),
-            padding=(2, 2),
+        self.conv1_left = nn.Conv2d(
+            in_channels=1,
+            out_channels=16,
+            kernel_size=(10, 23),
+            padding = 'same'
         )
-        self.batch1 = nn.BatchNorm2d(32)
-        self.batch2 = nn.BatchNorm2d(64)
-        self.batch3 = nn.BatchNorm1d(1024)
-        self.initialise_layer(self.conv1)
-        self.pool1 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
-        
-        self.conv2 = nn.Conv2d(
-            in_channels=32,
-            out_channels=64,
-            kernel_size=(5, 5),
-            padding=(2, 2),
-        )
-        self.initialise_layer(self.conv2)
-        self.pool2 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
 
-        self.fc1 = nn.Linear(4096,1024)
+        self.conv1_right = nn.Conv2d(
+            in_channels=1,
+            out_channels=16,
+            kernel_size=(21, 20),
+            padding = 'same'
+        )
+
+        self.initialise_layer(self.conv1_left)
+        self.pool1_left = nn.MaxPool2d(kernel_size=(1, 20))
+
+        self.initialise_layer(self.conv1_right)
+        self.pool1_right = nn.MaxPool2d(kernel_size=(20, 1))
+
+        self.fc1 = nn.Linear(10240,200)
         self.initialise_layer(self.fc1)
 
-        self.fc2 = nn.Linear(1024,10)
-        self.initialise_layer(self.fc1)
+        self.fc2 = nn.Linear(200,10)
+        self.initialise_layer(self.fc2)
 
-    def forward(self, images: torch.Tensor) -> torch.Tensor:
-        x = F.relu(self.batch1(self.conv1(images)))
-        x = self.pool1(x)
-        x = F.relu(self.batch2(self.conv2(x)))
-        x = self.pool2(x)
+
+    def forward(self, wav: torch.Tensor) -> torch.Tensor:
+        right_x = F.leaky_relu(self.conv1_right(wav),0.3)
+        right_x = self.pool1_right(right_x)
+        # x = F.relu(self.batch2(self.conv2(x)))
+        left_x = F.leaky_relu(self.conv1_left(wav),0.3)
+        # x = self.pool2(x)
+        left_x = self.pool1_left(left_x)
+
         flat = torch.nn.Flatten(1,-1)
-        x = flat(x)
-        x = F.relu(self.batch3(self.fc1(x)))
+        right_x = flat(right_x)
+        left_x  = flat(left_x)
+        # x = F.relu(self.batch3(self.fc1(x)))
+        # x = self.fc2(x)
+        left_right_merged = torch.cat((left_x,right_x),1)
+        x = F.leaky_relu(self.fc1(left_right_merged),0.3)
+        x = self.dropout(x)
         x = self.fc2(x)
         return x
 
@@ -131,7 +96,6 @@ class Trainer:
         optimizer: Optimizer,
         summary_writer: SummaryWriter,
         device: torch.device,
-        stepLR: Optimizer
     ):
         self.model = model.to(device)
         self.device = device
@@ -140,7 +104,6 @@ class Trainer:
         self.criterion = criterion
         self.optimizer = optimizer
         self.summary_writer = summary_writer
-        self.stepLR = stepLR
         self.step = 0
 
     def train(
@@ -154,18 +117,17 @@ class Trainer:
         self.model.train()
         for epoch in range(start_epoch, epochs):
             self.model.train()
-            self.stepLR.step()
             data_load_start_time = time.time()
-            for batch, labels in self.train_loader:
+            for filename, batch, labels, samples in self.train_loader:
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
                 data_load_end_time = time.time()
-
                 logits = self.model.forward(batch)
           
                 loss = self.criterion(logits,labels)
-                l1_reg = sum(torch.linalg.norm(p,1) for p in self.model.parameters())
-                loss += 0.0001 * l1_reg
+                weights = torch.cat([p.view(-1) for n, p in self.model.named_parameters() if '.weight' in n])
+                l1_regularization = 0.0001 * torch.norm(weights, 1)
+                loss += l1_regularization
                 loss.backward()
 
                 self.optimizer.step()
@@ -230,7 +192,7 @@ class Trainer:
 
         # No need to track gradients for validation, we're not optimizing.
         with torch.no_grad():
-            for batch, labels in self.val_loader:
+            for filename, batch, labels, samples  in self.val_loader:
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
                 logits = self.model(batch)
@@ -239,7 +201,6 @@ class Trainer:
                 preds = logits.argmax(dim=-1).cpu().numpy()
                 results["preds"].extend(list(preds))
                 results["labels"].extend(list(labels.cpu().numpy()))
-
         accuracy = compute_accuracy(
             np.array(results["labels"]), np.array(results["preds"])
         )
@@ -282,7 +243,7 @@ def get_summary_writer_log_dir() -> str:
         from getting logged to the same TB log directory (which you can't easily
         untangle in TB).
     """
-    tb_log_dir_prefix = f'CNN_bn_bs={128}_lr={0.1}_momentum={0.9}_final_with_momentum_withstep_run_'
+    tb_log_dir_prefix = f'200Epochs_run_'
     
     i = 0
     while i < 1000:
