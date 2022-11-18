@@ -18,7 +18,7 @@ EPOCHS = 200
 
 def main():
     model = CNN(height=80, width=80, channels=1, class_count=10)
-    log_dir = get_summary_writer_log_dir('shallow',EPOCHS)
+    log_dir = get_summary_writer_log_dir('Deep_Batch_Normalisation_',EPOCHS)
     summary_writer = SummaryWriter(str(log_dir),flush_secs=5)
     train_loader, test_loader = getDataLoaders('/user/home/nj18503/Applied-Deep-Learning/data',16)
     trainer = Trainer(model, train_loader, test_loader, summary_writer, DEVICE)
