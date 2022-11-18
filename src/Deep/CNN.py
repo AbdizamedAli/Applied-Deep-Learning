@@ -8,7 +8,6 @@ from torch.optim.optimizer import Optimizer
 class CNN(nn.Module):
     def __init__(self, height: int, width: int, channels: int, class_count: int):
         super().__init__()
-        self.softmax = nn.Softmax(dim=1)
         self.dropout = nn.Dropout(0.25)
         self.class_count = class_count
 
