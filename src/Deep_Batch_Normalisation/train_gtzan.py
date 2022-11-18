@@ -24,9 +24,9 @@ def main():
     trainer = Trainer(model, train_loader, test_loader, summary_writer, DEVICE)
     trainer.train(EPOCHS,2,print_frequency=10,log_frequency=10)
     torch.save({
-    'args': ['deep',EPOCHS],
+    'args': ['deep_batch',EPOCHS],
     'model': model.state_dict(),
-},  "".join(['deep',str(EPOCHS)]) )
+},  "".join(['deep_batch',str(EPOCHS)]) )
     summary_writer.close()
 
 if __name__ == "__main__":
