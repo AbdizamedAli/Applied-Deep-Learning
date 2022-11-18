@@ -26,7 +26,7 @@ def main():
     torch.save({
     'args': ['deep',EPOCHS],
     'model': model.state_dict(),
-},  "".join(['shallow',str(EPOCHS)]) )
+},  "".join(['deep',str(EPOCHS)]) )
     summary_writer.close()
 
 if __name__ == "__main__":
