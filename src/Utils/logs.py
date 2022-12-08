@@ -1,5 +1,6 @@
 from pathlib import Path
-def get_summary_writer_log_dir(arch_type: str, epoch: int) -> str:
+import argparse
+def get_summary_writer_log_dir(args: argparse.Namespace) -> str:
     """Get a unique directory that hasn't been logged to before for use with a TB
     SummaryWriter.
 
@@ -11,7 +12,8 @@ def get_summary_writer_log_dir(arch_type: str, epoch: int) -> str:
         from getting logged to the same TB log directory (which you can't easily
         untangle in TB).
     """
-    tb_log_dir_prefix = f'Epochs{epoch}_Model_Type{arch_type}_run_'
+    models = ['Shallow','Deep','Deep_Batch_Normalisation']
+    tb_log_dir_prefix = f'Epochs{args.epochs}_Model_Type{models[args.model]}_Batch_Size{args.batch_size}_run_'
 
     i = 0
     while i < 1000:

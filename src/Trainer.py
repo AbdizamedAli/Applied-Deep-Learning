@@ -8,6 +8,20 @@ import time
 from Utils.evalutation import compute_accuracy
 import numpy as np
 class Trainer:
+    """
+    A class for training and evaluating a PyTorch model.
+    
+    Attributes:
+        model (nn.Module): The PyTorch model to be trained and evaluated.
+        train_loader (DataLoader): A DataLoader for the training dataset.
+        val_loader (DataLoader): A DataLoader for the validation dataset.
+        summary_writer (SummaryWriter): A TensorBoard SummaryWriter for logging metrics.
+        device (torch.device): The device (CPU or GPU) to use for training and evaluation.
+        criterion (nn.CrossEntropyLoss): The loss function used for training.
+        optimizer (torch.optim.Adam): The optimizer used for training.
+        step (int): The current training step.
+    
+    """
     def __init__(
         self,
         model: nn.Module,
@@ -33,6 +47,17 @@ class Trainer:
         log_frequency: int = 5,
         start_epoch: int = 0
     ):
+        """
+        Train the model for the specified number of epochs.
+        
+        Args:
+            epochs (int): The number of epochs to train for.
+            val_frequency (int): The frequency (in epochs) at which to run validation.
+            print_frequency (int): The frequency (in steps) at which to print training metrics.
+            log_frequency (int): The frequency (in steps) at which to log training metrics.
+            start_epoch (int): The epoch at which to start training.
+        
+        """
         self.model.train()
         for epoch in range(start_epoch, epochs):
             self.model.train()
@@ -77,6 +102,16 @@ class Trainer:
                 self.model.train()
 
     def print_metrics(self, epoch, accuracy, loss, data_load_time, step_time):
+        """
+        Prints metrics for a given epoch, step, and batch.
+
+        Args:
+        epoch (int): current epoch number.
+        accuracy (float): batch accuracy.
+        loss (float): batch loss.
+        data_load_time (float): time to load data for the batch.
+        step_time (float): time to run a single step.
+        """
         epoch_step = self.step % len(self.train_loader)
         print(
             f"epoch: [{epoch}], "
@@ -89,6 +124,15 @@ class Trainer:
         )
 
     def log_metrics(self, epoch, accuracy, loss, data_load_time, step_time):
+        """Logs various metrics for a training epoch.
+
+        Args:
+        epoch: The number of the epoch being logged.
+        accuracy: The accuracy of the model on the training data for the current epoch.
+        loss: The loss of the model on the training data for the current epoch.
+        data_load_time: The time it took to load the data for the current epoch.
+        step_time: The time it took for a single training step in the current epoch.
+        """
         self.summary_writer.add_scalar("epoch", epoch, self.step)
         self.summary_writer.add_scalars(
             "accuracy",
@@ -112,10 +156,8 @@ class Trainer:
         total_loss = 0
         self.model.eval()
 
-        # No need to track gradients for validation, we're not optimizing.
         with torch.no_grad():
             for filename, batch, labels, samples in self.val_loader:
-                print(len(labels))
                 batch = batch.to(self.device)
                 labels = labels.to(self.device)
                 logits = self.model(batch)

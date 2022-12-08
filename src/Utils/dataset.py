@@ -6,9 +6,18 @@ from typing import Tuple
 from torch.utils.data import DataLoader
 from multiprocessing import cpu_count
 
-def getDataLoaders(path: str, bath_size: int) -> Tuple[DataLoader,DataLoader]:
-    train_dataset = GTZAN(path + '/train.pkl')
-    test_dataset  = GTZAN(path + '/val.pkl')
+def getDataLoaders(path: str,train_data_name: str,test_data_name: str, bath_size: int) -> Tuple[DataLoader,DataLoader]:
+    """
+    Creates PyTorch DataLoaders for training and testing datasets.
+    
+    :param path: The path to the directory containing the datasets.
+    :param train_data_name: The name of the training dataset file.
+    :param test_data_name: The name of the testing dataset file.
+    :param bath_size: The batch size to use for the DataLoaders.
+    :return: A tuple containing the train_loader and test_loader.
+    """
+    train_dataset = GTZAN(path + train_data_name)
+    test_dataset  = GTZAN(path + test_data_name)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
